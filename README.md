@@ -45,7 +45,142 @@ $ composer global require "laravel/installer"
 PHP のバージョンに応じた最新バージョンを選択して導入が行われる。
 
 ```bash
-$ composer create-project laravel/laravel <<project-name>>
+$ composer create-project laravel/laravel [project-name]
 // もし別のバージョンにしたかったら下記のようにする
-$ composer create-project laravel/laravel <<project-name>> 5.4.* --prefer-dist
+$ composer create-project laravel/laravel [project-name] 5.4.* --prefer-dist
 ```
+
+## 3. Run Project 
+動作確認は、Run Project を押すと確認することができます。
+
+## 4. Change DocumentRoot
+
+Apache2 の設定ファイルを編集して、ドキュメントルートを変更します。
+下記の [project-name] は前述のプロジェクト名と同じものを入力する。
+
+```bash
+/Open configure file/
+$ sudo vim /etc/apache2/sites-enabled/001-cloud9.conf
+<VirtualHost *:8080>
+    DocumentRoot /home/ubuntu/workspace/[project-name]/public
+    ...
+
+$ service apache2 restart
+$ cd [project-name]
+$ composer update
+```
+
+## 5. mysql の設定
+Cloud9 内部で mysql を構成することができるので、そのまま使用する。
+
+### 5.1. .env
+Laravel のディレクトリ直下にある .env の編集を編集して、mysqlと接続できるようにする。
+
+> DB_CONNECTION=mysql
+> DB_HOST=127.0.0.1
+> DB_PORT=3306
+> DB_DATABASE=c9
+> DB_USERNAME=<account name>
+> DB_PASSWORD=
+
+### 5.2. データベースとテーブル
+```bash
+mysql への接続
+$ mysql-ctl cli
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| c9                 | <- 目的のデータベース
+| mysql              |
+| performance_schema |
+| phpmyadmin         |
++--------------------+
+5 rows in set (0.01 sec)
+mysql> use c9
+Empty set (0.00 sec)
+
+mysql> exit;
+```
+
+### 5.3. utf8mb4
+
+Laravel 5.4 から文字列の設定に難あり。mysql では、utf8mb4 を使っていくようだが。
+
+```bash
+$ sudo vi /etc/mysql/my.cnf
+[mysqld]
+character-set-server=utf8mb4
+[client]
+default-character-set=utf8mb4
+```
+
+```mysql
+mysql> show variables like 'char%' ;
++--------------------------+----------------------------+
+| Variable_name            | Value                      |
++--------------------------+----------------------------+
+| character_set_client     | utf8mb4                    |
+| character_set_connection | utf8mb4                    |
+| character_set_database   | utf8                       |
+| character_set_filesystem | binary                     |
+| character_set_results    | utf8mb4                    |
+| character_set_server     | utf8mb4                    |
+| character_set_system     | utf8                       |
+| character_sets_dir       | /usr/share/mysql/charsets/ |
++--------------------------+----------------------------+
+8 rows in set (0.00 sec)
+
+mysql> ALTER DATABASE c9 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci ;
+```
+最初からある users テーブルの migration を通すため、AppServiceProvider に細工を施します。
+varchar(191) にすると、通るようになります。
+
+```php
+<?php
+
+// app/Providers/AppServiceProvider.php 
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Schema ;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Bootstrap any application services.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+        //
+        Schema::defaultStringLength(191) ;
+    }
+
+    /**
+     * Register any application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        //
+    }
+}
+```
+
+## ex. git での管理
+Cloud 9 の IDE から git 連携することはできませんが、terminal がそもそもあるので、
+ここから gitコマンドを入力することでリポジトリに保存することができます。
+
+```
+git add . 
+git commit -m "First commit"
+git push -u origin master
+```
+
+
+
